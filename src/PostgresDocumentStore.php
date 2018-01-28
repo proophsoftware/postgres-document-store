@@ -400,7 +400,10 @@ EOT;
             case DocumentStore\Filter\LikeFilter::class:
                 /** @var DocumentStore\Filter\LikeFilter $filter */
                 $prop = $this->propToJsonPath($filter->prop());
-                return ["$prop LIKE :a$argsCount", ["a$argsCount" => json_encode($filter->val())], ++$argsCount];
+                $propParts = explode('->', $prop);
+                $lastProp = array_pop($propParts);
+                $prop = implode('->', $propParts) . '->>'.$lastProp;
+                return ["$prop LIKE :a$argsCount", ["a$argsCount" => $filter->val()], ++$argsCount];
             case DocumentStore\Filter\NotFilter::class:
                 /** @var DocumentStore\Filter\NotFilter $filter */
                 $innerFilter = $filter->innerFilter();

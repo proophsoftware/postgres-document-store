@@ -130,6 +130,15 @@ foreach ($cats as $cat) {
     echo "Cat: " . json_encode($cat) . "\n";
 }
 
+$tiNames = $documentStore->filterDocs(
+    'animals',
+    new Filter\LikeFilter('name', 'Ti%')
+);
+
+foreach ($tiNames as $tiName) {
+    echo "Animal name starting with Ti: " . json_encode($tiName) . "\n";
+}
+
 $documentStore->updateMany('animals', new Filter\GteFilter('character.friendly', 5), ['pet' => true]);
 
 $pets = $documentStore->filterDocs('animals', new Filter\EqFilter('pet', true));
