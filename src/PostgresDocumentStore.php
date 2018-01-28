@@ -46,10 +46,11 @@ final class PostgresDocumentStore implements DocumentStore
      */
     public function listCollections(): array
     {
+        $prefix = mb_strtolower($this->tablePrefix);
         $query = <<<EOT
 SELECT TABLE_NAME 
 FROM information_schema.tables
-WHERE TABLE_NAME LIKE '{$this->tablePrefix}%'
+WHERE TABLE_NAME LIKE '{$prefix}%'
 EOT;
 
         $stmt = $this->connection->prepare($query);
@@ -59,7 +60,7 @@ EOT;
         $collections = [];
 
         while ($col = $stmt->fetchColumn()) {
-            $collections[] = str_replace($this->tablePrefix, '', $col);
+            $collections[] = str_replace($prefix, '', $col);
         }
 
         return $collections;
@@ -71,10 +72,12 @@ EOT;
      */
     public function filterCollectionsByPrefix(string $prefix): array
     {
+        $tPrefix = mb_strtolower($this->tablePrefix);
+        $prefix = mb_strtolower($prefix);
         $query = <<<EOT
 SELECT TABLE_NAME 
 FROM information_schema.tables
-WHERE TABLE_NAME LIKE '{$this->tablePrefix}$prefix%'
+WHERE TABLE_NAME LIKE '{$tPrefix}$prefix%'
 EOT;
 
         $stmt = $this->connection->prepare($query);
@@ -84,7 +87,7 @@ EOT;
         $collections = [];
 
         while ($col = $stmt->fetchColumn()) {
-            $collections[] = str_replace($this->tablePrefix, '', $col);
+            $collections[] = str_replace($tPrefix, '', $col);
         }
 
         return $collections;
@@ -99,7 +102,7 @@ EOT;
         $query = <<<EOT
 SELECT TABLE_NAME 
 FROM information_schema.tables
-WHERE TABLE_NAME = '{$this->tablePrefix}$collectionName'
+WHERE TABLE_NAME = '{$this->tableName($collectionName)}'
 EOT;
 
         $stmt = $this->connection->prepare($query);
@@ -118,7 +121,7 @@ EOT;
     public function addCollection(string $collectionName, Index ...$indices): void
     {
         $cmd = <<<EOT
-CREATE TABLE {$this->tablePrefix}{$collectionName} (
+CREATE TABLE {$this->tableName($collectionName)} (
     id {$this->docIdSchema},
     doc JSONB NOT NULL,
     PRIMARY KEY (id)
@@ -145,7 +148,7 @@ EOT;
     public function dropCollection(string $collectionName): void
     {
         $cmd = <<<EOT
-DROP TABLE {$this->tablePrefix}{$collectionName};
+DROP TABLE {$this->tableName($collectionName)};
 EOT;
 
         $this->transactional(function () use ($cmd) {
@@ -162,7 +165,7 @@ EOT;
     public function addDoc(string $collectionName, string $docId, array $doc): void
     {
         $cmd = <<<EOT
-INSERT INTO {$this->tablePrefix}{$collectionName} (id, doc) VALUES (:id, :doc);
+INSERT INTO {$this->tableName($collectionName)} (id, doc) VALUES (:id, :doc);
 EOT;
         $this->transactional(function () use ($cmd, $docId, $doc) {
             $this->connection->prepare($cmd)->execute([
@@ -181,7 +184,7 @@ EOT;
     public function updateDoc(string $collectionName, string $docId, array $docOrSubset): void
     {
         $cmd = <<<EOT
-UPDATE {$this->tablePrefix}{$collectionName}
+UPDATE {$this->tableName($collectionName)}
 SET doc = (to_jsonb(doc) || :doc)
 WHERE id = :id
 ;
@@ -207,7 +210,7 @@ EOT;
         $where = $filterStr? "WHERE $filterStr" : '';
 
         $cmd = <<<EOT
-UPDATE {$this->tablePrefix}{$collectionName}
+UPDATE {$this->tableName($collectionName)}
 SET doc = (to_jsonb(doc) || :doc)
 $where;
 EOT;
@@ -246,7 +249,7 @@ EOT;
     public function deleteDoc(string $collectionName, string $docId): void
     {
         $cmd = <<<EOT
-DELETE FROM {$this->tablePrefix}{$collectionName}
+DELETE FROM {$this->tableName($collectionName)}
 WHERE id = :id
 EOT;
 
@@ -269,7 +272,7 @@ EOT;
         $where = $filterStr? "WHERE $filterStr" : '';
 
         $cmd = <<<EOT
-DELETE FROM {$this->tablePrefix}{$collectionName}
+DELETE FROM {$this->tableName($collectionName)}
 $where;
 EOT;
 
@@ -287,7 +290,7 @@ EOT;
     {
         $query = <<<EOT
 SELECT doc
-FROM {$this->tablePrefix}{$collectionName}
+FROM {$this->tableName($collectionName)}
 WHERE id = :id
 EOT;
         $stmt = $this->connection->prepare($query);
@@ -324,7 +327,7 @@ EOT;
 
         $query = <<<EOT
 SELECT doc 
-FROM {$this->tablePrefix}{$collectionName}
+FROM {$this->tableName($collectionName)}
 $where
 $orderBy
 $limit
@@ -478,7 +481,7 @@ EOT;
         }
 
         $cmd = <<<EOT
-CREATE $type ON {$this->tablePrefix}{$collectionName}
+CREATE $type ON {$this->tableName($collectionName)}
 $fields;
 EOT;
 
@@ -490,5 +493,10 @@ EOT;
         $direction = $fieldIndex->sort() === Index::SORT_ASC ? 'ASC' : 'DESC';
         $prop = $this->propToJsonPath($fieldIndex->field());
         return "($prop) $direction";
+    }
+
+    private function tableName(string $collectionName): string
+    {
+        return mb_strtolower($this->tablePrefix . $collectionName);
     }
 }
