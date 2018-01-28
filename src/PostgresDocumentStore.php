@@ -125,8 +125,16 @@ CREATE TABLE {$this->tablePrefix}{$collectionName} (
 );
 EOT;
 
-        $this->transactional(function() use ($cmd) {
+        $indicesCmds = array_map(function (Index $index) use ($collectionName) {
+            return $this->indexToSqlCmd($index, $collectionName);
+        }, $indices);
+
+        $this->transactional(function() use ($cmd, $indicesCmds) {
             $this->connection->prepare($cmd)->execute();
+
+            array_walk($indicesCmds, function ($cmd) {
+                $this->connection->prepare($cmd)->execute();
+            });
         });
     }
 
@@ -237,7 +245,16 @@ EOT;
      */
     public function deleteDoc(string $collectionName, string $docId): void
     {
-        // TODO: Implement deleteDoc() method.
+        $cmd = <<<EOT
+DELETE FROM {$this->tablePrefix}{$collectionName}
+WHERE id = :id
+EOT;
+
+        $this->transactional(function () use ($cmd, $docId) {
+            $stmt = $this->connection->prepare($cmd);
+
+            $stmt->execute(['id' => $docId]);
+        });
     }
 
     /**
@@ -247,7 +264,18 @@ EOT;
      */
     public function deleteMany(string $collectionName, Filter $filter): void
     {
-        // TODO: Implement deleteMany() method.
+        [$filterStr, $args] = $this->filterToWhereClause($filter);
+
+        $where = $filterStr? "WHERE $filterStr" : '';
+
+        $cmd = <<<EOT
+DELETE FROM {$this->tablePrefix}{$collectionName}
+$where;
+EOT;
+
+        $this->transactional(function () use ($cmd, $args) {
+            $this->connection->prepare($cmd)->execute($args);
+        });
     }
 
     /**
@@ -289,10 +317,18 @@ EOT;
 
         $where = $filterStr? "WHERE $filterStr" : '';
 
+        $offset = $skip !== null ? "OFFSET $skip" : '';
+        $limit = $limit !== null ? "LIMIT $limit" : '';
+
+        $orderBy = $orderBy ? "ORDER BY " . implode(', ', $this->orderByToSort($orderBy)) : '';
+
         $query = <<<EOT
 SELECT doc 
 FROM {$this->tablePrefix}{$collectionName}
-$where;
+$where
+$orderBy
+$limit
+$offset;
 EOT;
         $stmt = $this->connection->prepare($query);
 
@@ -375,8 +411,15 @@ EOT;
                 return ["NOT $innerFilterStr", $args, $argsCount];
             case DocumentStore\Filter\InArrayFilter::class:
                 /** @var DocumentStore\Filter\InArrayFilter $filter */
+                $prop = $this->propToJsonPath($filter->prop());
+                return ["$prop @> :a$argsCount", ["a$argsCount" => json_encode($filter->val())], ++$argsCount];
             case DocumentStore\Filter\ExistsFilter::class:
                 /** @var DocumentStore\Filter\ExistsFilter $filter */
+                $prop = $this->propToJsonPath($filter->prop());
+                $propParts = explode('->', $prop);
+                $lastProp = trim(array_pop($propParts), "'");
+                $parentProps = implode('->', $propParts);
+                return ["JSONB_EXISTS($parentProps, '$lastProp')", [], $argsCount];
             default:
                 throw new \RuntimeException("Unsupported filter type. Got " . get_class($filter));
         }
@@ -397,5 +440,55 @@ EOT;
             default:
                 return true;
         }
+    }
+
+    private function orderByToSort(DocumentStore\OrderBy\OrderBy $orderBy): array
+    {
+        $sort = [];
+
+        if($orderBy instanceof DocumentStore\OrderBy\AndOrder) {
+            /** @var DocumentStore\OrderBy\Asc|DocumentStore\OrderBy\Desc $orderByA */
+            $orderByA = $orderBy->a();
+            $direction = $orderByA instanceof DocumentStore\OrderBy\Asc ? 'ASC' : 'DESC';
+            $prop = $this->propToJsonPath($orderByA->prop());
+            $sort[] = "{$prop} $direction";
+
+            $sortB = $this->orderByToSort($orderBy->b());
+
+            return array_merge($sort, $sortB);
+        }
+
+        /** @var DocumentStore\OrderBy\Asc|DocumentStore\OrderBy\Desc $orderBy */
+        $direction = $orderBy instanceof DocumentStore\OrderBy\Asc ? 'ASC' : 'DESC';
+        $prop = $this->propToJsonPath($orderBy->prop());
+        return ["{$prop} $direction"];
+    }
+
+    private function indexToSqlCmd(Index $index, string $collectionName): string
+    {
+        if($index instanceof DocumentStore\FieldIndex) {
+            $type = $index->unique() ? 'UNIQUE INDEX' : 'INDEX';
+            $fields = '('.$this->extractFieldPartFromFieldIndex($index).')';
+        } elseif ($index instanceof DocumentStore\MultiFieldIndex) {
+            $type = $index->unique() ? 'UNIQUE INDEX' : 'INDEX';
+            $fieldParts = array_map([$this, 'extractFieldPartFromFieldIndex'], $index->fields());
+            $fields = '('.implode(', ', $fieldParts).')';
+        } else {
+            throw new \RuntimeException("Unsupported index type. Got " . get_class($index));
+        }
+
+        $cmd = <<<EOT
+CREATE $type ON {$this->tablePrefix}{$collectionName}
+$fields;
+EOT;
+
+        return $cmd;
+    }
+
+    private function extractFieldPartFromFieldIndex(DocumentStore\FieldIndex $fieldIndex): string
+    {
+        $direction = $fieldIndex->sort() === Index::SORT_ASC ? 'ASC' : 'DESC';
+        $prop = $this->propToJsonPath($fieldIndex->field());
+        return "($prop) $direction";
     }
 }
