@@ -1,0 +1,47 @@
+{
+  "name": "proophsoftware/postgres-document-store",
+  "description": "PostgreSQL Document Store for Event Machine",
+  "homepage": "http://prooph.de/",
+  "license": "BSD-3-Clause",
+  "authors": [
+    {
+      "name": "Alexander Miertsch",
+      "email": "contact@prooph.de",
+      "homepage": "http://www.prooph.de"
+    },
+    {
+      "name": "Sandro Keil",
+      "email": "contact@prooph.de",
+      "homepage": "http://prooph-software.com/"
+    }
+  ],
+  "require": {
+    "php": "^7.1",
+    "roave/security-advisories": "dev-master"
+  },
+  "require-dev": {
+    "proophsoftware/event-machine": "^0.11",
+    "phpunit/phpunit": "^6.0",
+    "phpspec/prophecy": "^1.7",
+    "prooph/php-cs-fixer-config": "^0.2.1",
+    "prooph/bookdown-template": "^0.2.3",
+    "satooshi/php-coveralls": "^1.0",
+    "malukenho/docheader": "^0.1.4"
+  },
+  "autoload": {
+    "psr-4": {
+      "Prooph\\EventMachine\\Postgres\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Prooph\\EventMachineTest\\Postgres\\": "tests/"
+    }
+  },
+  "prefer-stable": true,
+  "scripts": {
+    "test": "vendor/bin/phpunit",
+    "cs": "php-cs-fixer fix -v --diff --dry-run",
+    "cs-fix": "php-cs-fixer fix -v --diff"
+  }
+}
