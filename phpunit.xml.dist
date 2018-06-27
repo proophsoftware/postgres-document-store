@@ -19,4 +19,14 @@
             <directory>./src/</directory>
         </whitelist>
     </filter>
+    <php>
+        <env name="DB_HOST" value="postgres"/>
+        <env name="DB_USERNAME" value="postgres"/>
+        <env name="DB_PASSWORD" value=""/>
+        <env name="DB_NAME" value="event_machine"/>
+        <env name="DB_PORT" value="5432"/>
+        <env name="DB_CHARSET" value="utf8"/>
+        <!-- \PDO::ERRMODE_SILENT -->
+        <env name="DB_ATTR_ERRMODE" value="0"/>
+    </php>
 </phpunit>
