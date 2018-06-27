@@ -15,6 +15,8 @@ use Prooph\EventMachine\Persistence\DocumentStore;
 use Prooph\EventMachine\Persistence\DocumentStore\Filter\Filter;
 use Prooph\EventMachine\Persistence\DocumentStore\Index;
 use Prooph\EventMachine\Persistence\DocumentStore\OrderBy\OrderBy;
+use Prooph\EventMachine\Postgres\Exception\InvalidArgumentException;
+use Prooph\EventMachine\Postgres\Exception\RuntimeException;
 
 final class PostgresDocumentStore implements DocumentStore
 {
@@ -342,7 +344,7 @@ EOT;
         }
     }
 
-    private function transactional(callable $callback)
+    private function transactional(callable $callback): void
     {
         $this->connection->beginTransaction();
 
@@ -359,7 +361,7 @@ EOT;
     {
         if($filter instanceof DocumentStore\Filter\AnyFilter) {
             if($argsCount > 0) {
-                throw new \InvalidArgumentException("AnyFilter cannot be used together with other filters.");
+                throw new InvalidArgumentException('AnyFilter cannot be used together with other filters.');
             }
             return [null, [], $argsCount];
         }
@@ -409,7 +411,7 @@ EOT;
                 $innerFilter = $filter->innerFilter();
 
                 if (!$this->isPropFilter($innerFilter)) {
-                    throw new \RuntimeException("Not filter cannot be combined with a non prop filter!");
+                    throw new RuntimeException('Not filter cannot be combined with a non prop filter!');
                 }
 
                 [$innerFilterStr, $args, $argsCount] = $this->filterToWhereClause($innerFilter);
@@ -427,7 +429,7 @@ EOT;
                 $parentProps = implode('->', $propParts);
                 return ["JSONB_EXISTS($parentProps, '$lastProp')", [], $argsCount];
             default:
-                throw new \RuntimeException("Unsupported filter type. Got " . get_class($filter));
+                throw new RuntimeException('Unsupported filter type. Got ' . get_class($filter));
         }
     }
 
@@ -480,7 +482,7 @@ EOT;
             $fieldParts = array_map([$this, 'extractFieldPartFromFieldIndex'], $index->fields());
             $fields = '('.implode(', ', $fieldParts).')';
         } else {
-            throw new \RuntimeException("Unsupported index type. Got " . get_class($index));
+            throw new RuntimeException('Unsupported index type. Got ' . get_class($index));
         }
 
         $cmd = <<<EOT
