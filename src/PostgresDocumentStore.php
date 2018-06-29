@@ -29,8 +29,14 @@ final class PostgresDocumentStore implements DocumentStore
 
     private $docIdSchema = 'UUID NOT NULL';
 
-    public function __construct(\PDO $connection, string $tablePrefix = null, string $docIdSchema = null)
-    {
+    private $manageTransactions;
+
+    public function __construct(
+        \PDO $connection,
+        string $tablePrefix = null,
+        string $docIdSchema = null,
+        bool $transactional = true
+    ) {
         $this->connection = $connection;
         $this->connection->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 
@@ -41,6 +47,8 @@ final class PostgresDocumentStore implements DocumentStore
         if($docIdSchema) {
             $this->docIdSchema = $docIdSchema;
         }
+
+        $this->manageTransactions = $transactional;
     }
 
     /**
@@ -344,15 +352,21 @@ EOT;
         }
     }
 
-    private function transactional(callable $callback): void
+    private function transactional(callable $callback)
     {
-        $this->connection->beginTransaction();
+        if($this->manageTransactions) {
+            $this->connection->beginTransaction();
+        }
 
         try {
             $callback();
-            $this->connection->commit();
+            if($this->manageTransactions) {
+                $this->connection->commit();
+            }
         } catch (\Throwable $exception) {
-            $this->connection->rollBack();
+            if($this->manageTransactions) {
+                $this->connection->rollBack();
+            }
             throw $exception;
         }
     }
