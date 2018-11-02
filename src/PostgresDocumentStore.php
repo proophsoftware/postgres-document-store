@@ -40,11 +40,11 @@ final class PostgresDocumentStore implements DocumentStore
         $this->connection = $connection;
         $this->connection->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
 
-        if($tablePrefix) {
+        if(null !== $tablePrefix) {
             $this->tablePrefix = $tablePrefix;
         }
 
-        if($docIdSchema) {
+        if(null !== $docIdSchema) {
             $this->docIdSchema = $docIdSchema;
         }
 
